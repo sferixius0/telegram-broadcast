@@ -1,7 +1,8 @@
 import asyncio
 import os
+import random
 import base64
-from telethon import TelegramClient
+from telethon import TelegramClient, functions
 from messages import MESSAGES
 
 # ===== НАСТРОЙКИ =====
@@ -10,19 +11,11 @@ API_HASH = os.environ["API_HASH"]
 PHONE = os.environ["PHONE"]
 SESSION_B64 = os.environ["SESSION_B64"]
 
-GROUPS = [
-    "baraholkapnpn",
-    "baraholkapolostknovopolotsk",
-    "baraholkapnp",
-    "baraholkapolostknp",
-    "barakholka_polotsk",
-    "SmokeHub_baraholka_Polotsk",
-]
-
+FOLDER_NAME = "барахолки"  # Имя папки в Telegram
 # =====================
 
 async def main():
-    # Восстанавливаем файл сессии из секрета
+    # Восстанавливаем сессию
     with open("userbot_session.session", "wb") as f:
         f.write(base64.b64decode(SESSION_B64))
 
@@ -30,28 +23,57 @@ async def main():
     await client.start(phone=PHONE)
     print("✅ Аккаунт подключён")
 
-    # Берём шаблон по индексу
+    # 1. Находим папку по имени
+    print(f"🔍 Ищем папку '{FOLDER_NAME}'...")
+    filters_result = await client(functions.messages.GetDialogFiltersRequest())
+
+    target_folder_id = None
+    for f in filters_result.filters:
+        if hasattr(f, 'title') and f.title == FOLDER_NAME:
+            target_folder_id = f.id
+            print(f"✅ Папка найдена! ID: {target_folder_id}")
+            break
+
+    if target_folder_id is None:
+        print(f"❌ Папка '{FOLDER_NAME}' не найдена!")
+        await client.disconnect()
+        return
+
+    # 2. Получаем чаты из папки
+    print(f"📂 Загружаем чаты...")
+    dialogs = await client.get_dialogs(folder=target_folder_id)
+    groups = [d.entity for d in dialogs if d.is_group or d.is_channel]
+    print(f"📊 Найдено чатов: {len(groups)}")
+
+    if not groups:
+        print("❌ В папке нет чатов.")
+        await client.disconnect()
+        return
+
+    # 3. Загружаем индекс
     try:
         with open("last_index.txt", "r") as f:
             index = int(f.read().strip())
     except (FileNotFoundError, ValueError):
         index = 0
 
-    message = MESSAGES[index % len(MESSAGES)]
-    print(f"Отправляем шаблон #{index % len(MESSAGES) + 1}")
+    # 4. Рассылаем
+    message_text = MESSAGES[index % len(MESSAGES)]
+    print(f"📨 Отправляем шаблон #{index % len(MESSAGES) + 1}")
 
-    for group in GROUPS:
+    for i, group in enumerate(groups):
         try:
-            await client.send_message(group, message)
-            print(f"[OK] {group}")
+            await client.send_message(group, message_text)
+            print(f"[{i+1}/{len(groups)}] ✅ {getattr(group, 'title', 'Без названия')}")
         except Exception as e:
-            print(f"[ERR] {group}: {e}")
-        await asyncio.sleep(30)
+            print(f"[{i+1}/{len(groups)}] ❌ {getattr(group, 'title', 'Без названия')} — {e}")
+        await asyncio.sleep(random.randint(30, 90))
 
-    # Сохраняем следующий индекс
+    # 5. Сохраняем следующий индекс
     with open("last_index.txt", "w") as f:
         f.write(str(index + 1))
 
+    print("✅ Рассылка завершена!")
     await client.disconnect()
 
 if __name__ == "__main__":
