@@ -48,28 +48,31 @@ async def main():
         await client.disconnect()
         return
 
-    # 2. Получаем чаты из папки
-    print(f"📂 Загружаем чаты...")
-    from telethon.tl.functions.messages import GetDialogsRequest
-    from telethon.tl.types import InputPeerEmpty
+    # 2. Получаем чаты напрямую из объекта папки
+    print(f"📂 Извлекаем чаты из папки...")
     
-    dialogs_result = await client(GetDialogsRequest(
-        offset_date=None,
-        offset_id=0,
-        offset_peer=InputPeerEmpty(),
-        limit=200,
-        hash=0,
-        folder_id=target_folder_id
-    ))
-    
-    # Собираем чаты (исключаем пользователей, оставляем только группы и каналы)
     groups = []
-    for chat in dialogs_result.chats:
-        if getattr(chat, 'megagroup', False) or getattr(chat, 'broadcast', False):
-            groups.append(chat)
+    # Ищем нашу папку в списке еще раз, чтобы получить её объект
+    target_folder_obj = None
+    for f in filters_result.filters:
+        if hasattr(f, 'title'):
+            title = f.title.text if hasattr(f.title, 'text') else str(f.title)
+            if title == FOLDER_NAME:
+                target_folder_obj = f
+                break
+    
+    if target_folder_obj:
+        # include_peers содержит список чатов, которые вручную добавлены в папку
+        for peer in target_folder_obj.include_peers:
+            try:
+                # Преобразуем InputPeer в полный объект чата
+                entity = await client.get_entity(peer)
+                groups.append(entity)
+            except Exception as e:
+                print(f"  [ERR] Не удалось получить чат: {e}")
     
     print(f"📊 Найдено чатов: {len(groups)}")
-
+    
     if not groups:
         print("❌ В папке нет чатов.")
         await client.disconnect()
