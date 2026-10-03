@@ -1,12 +1,14 @@
 import asyncio
 import os
+import base64
 from telethon import TelegramClient
 from messages import MESSAGES
 
-# ===== НАСТРОЙКИ (берутся из секретов GitHub) =====
+# ===== НАСТРОЙКИ =====
 API_ID = int(os.environ["API_ID"])
 API_HASH = os.environ["API_HASH"]
 PHONE = os.environ["PHONE"]
+SESSION_B64 = os.environ["SESSION_B64"]
 
 GROUPS = [
     "baraholkapnpn",
@@ -20,11 +22,15 @@ GROUPS = [
 # =====================
 
 async def main():
+    # Восстанавливаем файл сессии из секрета
+    with open("userbot_session.session", "wb") as f:
+        f.write(base64.b64decode(SESSION_B64))
+
     client = TelegramClient("userbot_session", API_ID, API_HASH)
     await client.start(phone=PHONE)
+    print("✅ Аккаунт подключён")
 
-    # Берём шаблон, который ещё не отправляли
-    # Если файла с индексом нет — начинаем с 0
+    # Берём шаблон по индексу
     try:
         with open("last_index.txt", "r") as f:
             index = int(f.read().strip())
