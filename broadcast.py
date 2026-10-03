@@ -2,7 +2,7 @@ import asyncio
 import os
 import random
 import base64
-from telethon import TelegramClient, functions
+from telethon import TelegramClient
 from messages import MESSAGES
 
 # ===== НАСТРОЙКИ =====
@@ -11,11 +11,28 @@ API_HASH = os.environ["API_HASH"]
 PHONE = os.environ["PHONE"]
 SESSION_B64 = os.environ["SESSION_B64"]
 
-FOLDER_NAME = "барахолки"  # Имя папки в Telegram
+# ===== СПИСОК ГРУПП =====
+GROUPS = [
+    # Полоцк / Новополоцк
+    "baraholkapnpn",
+    "baraholkapolostknovopolotsk",
+    "baraholkapnp",
+    "baraholkapolostknp",
+    "baraholkapolostknp0",
+    "barakholka_polotsk",
+    "SmokeHub_baraholka_Polotsk",
+    # Минск / РБ
+    "onlyvapebel",
+    "minsk_vape7",
+    # Другие
+    "barakholka1",
+    "baraholka_v_rb",
+    "baraholka_ge",
+]
 # =====================
 
 async def main():
-    # Восстанавливаем сессию
+    # Восстанавливаем сессию из base64
     with open("userbot_session.session", "wb") as f:
         f.write(base64.b64decode(SESSION_B64))
 
@@ -23,81 +40,28 @@ async def main():
     await client.start(phone=PHONE)
     print("✅ Аккаунт подключён")
 
-    # 1. Находим папку по имени
-    print(f"🔍 Ищем папку '{FOLDER_NAME}'...")
-    filters_result = await client(functions.messages.GetDialogFiltersRequest())
-
-    # Отладка: выводим все папки
-    print("📋 Список всех папок:")
-    for f in filters_result.filters:
-        if hasattr(f, 'title'):
-            print(f"  - '{f.title}' (ID: {getattr(f, 'id', '?')})")
-
-    target_folder_id = None
-    for f in filters_result.filters:
-        if hasattr(f, 'title'):
-            # title может быть строкой или TextWithEntities
-            title = f.title.text if hasattr(f.title, 'text') else str(f.title)
-            if title == FOLDER_NAME:
-                target_folder_id = f.id
-                print(f"✅ Папка найдена! ID: {target_folder_id}")
-                break
-
-    if target_folder_id is None:
-        print(f"❌ Папка '{FOLDER_NAME}' не найдена!")
-        await client.disconnect()
-        return
-
-    # 2. Получаем чаты напрямую из объекта папки
-    print(f"📂 Извлекаем чаты из папки...")
-    
-    groups = []
-    # Ищем нашу папку в списке еще раз, чтобы получить её объект
-    target_folder_obj = None
-    for f in filters_result.filters:
-        if hasattr(f, 'title'):
-            title = f.title.text if hasattr(f.title, 'text') else str(f.title)
-            if title == FOLDER_NAME:
-                target_folder_obj = f
-                break
-    
-    if target_folder_obj:
-        # include_peers содержит список чатов, которые вручную добавлены в папку
-        for peer in target_folder_obj.include_peers:
-            try:
-                # Преобразуем InputPeer в полный объект чата
-                entity = await client.get_entity(peer)
-                groups.append(entity)
-            except Exception as e:
-                print(f"  [ERR] Не удалось получить чат: {e}")
-    
-    print(f"📊 Найдено чатов: {len(groups)}")
-    
-    if not groups:
-        print("❌ В папке нет чатов.")
-        await client.disconnect()
-        return
-
-    # 3. Загружаем индекс
+    # Загружаем индекс (какой шаблон отправить следующим)
     try:
         with open("last_index.txt", "r") as f:
             index = int(f.read().strip())
     except (FileNotFoundError, ValueError):
         index = 0
 
-    # 4. Рассылаем
+    # Берём текст по индексу
     message_text = MESSAGES[index % len(MESSAGES)]
-    print(f"📨 Отправляем шаблон #{index % len(MESSAGES) + 1}")
+    print(f"📨 Отправляем шаблон #{index % len(MESSAGES) + 1} из {len(MESSAGES)}")
 
-    for i, group in enumerate(groups):
+    # Рассылка по списку групп
+    for i, group in enumerate(GROUPS):
         try:
             await client.send_message(group, message_text)
-            print(f"[{i+1}/{len(groups)}] ✅ {getattr(group, 'title', 'Без названия')}")
+            print(f"[{i+1}/{len(GROUPS)}] ✅ {group}")
         except Exception as e:
-            print(f"[{i+1}/{len(groups)}] ❌ {getattr(group, 'title', 'Без названия')} — {e}")
+            print(f"[{i+1}/{len(GROUPS)}] ❌ {group} — {e}")
+        # Пауза между группами, чтобы не спалиться
         await asyncio.sleep(random.randint(30, 90))
 
-    # 5. Сохраняем следующий индекс
+    # Сохраняем следующий индекс
     with open("last_index.txt", "w") as f:
         f.write(str(index + 1))
 
