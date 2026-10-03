@@ -2,21 +2,28 @@ name: Telegram Broadcast
 
 on:
   schedule:
-    - cron: '0 * * * *'  # каждый час (0 минут каждого часа)
-  workflow_dispatch:      # возможность запустить вручную
+    - cron: "0 * * * *"   # каждый час
+  workflow_dispatch:       # возможность запустить вручную
+
+permissions:
+  contents: write          # разрешение на запись в репозиторий (для last_index.txt)
 
 jobs:
   broadcast:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
-      - name: Install Telethon
+      - name: Install dependencies
         run: pip install telethon
 
       - name: Run broadcast
@@ -27,9 +34,9 @@ jobs:
           SESSION_B64: ${{ secrets.SESSION_B64 }}
         run: python broadcast.py
 
-      - name: Save last index
+      - name: Commit last_index.txt
         run: |
-          git config user.name "GitHub Actions"
+          git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add last_index.txt
           git commit -m "Update index" || echo "No changes"
