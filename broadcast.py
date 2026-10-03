@@ -27,6 +27,12 @@ async def main():
     print(f"🔍 Ищем папку '{FOLDER_NAME}'...")
     filters_result = await client(functions.messages.GetDialogFiltersRequest())
 
+    # Отладка: выводим все папки
+    print("📋 Список всех папок:")
+    for f in filters_result.filters:
+        if hasattr(f, 'title'):
+            print(f"  - '{f.title}' (ID: {getattr(f, 'id', '?')})")
+
     target_folder_id = None
     for f in filters_result.filters:
         if hasattr(f, 'title') and f.title == FOLDER_NAME:
