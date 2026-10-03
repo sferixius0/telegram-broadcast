@@ -35,10 +35,13 @@ async def main():
 
     target_folder_id = None
     for f in filters_result.filters:
-        if hasattr(f, 'title') and f.title == FOLDER_NAME:
-            target_folder_id = f.id
-            print(f"✅ Папка найдена! ID: {target_folder_id}")
-            break
+        if hasattr(f, 'title'):
+            # title может быть строкой или TextWithEntities
+            title = f.title.text if hasattr(f.title, 'text') else str(f.title)
+            if title == FOLDER_NAME:
+                target_folder_id = f.id
+                print(f"✅ Папка найдена! ID: {target_folder_id}")
+                break
 
     if target_folder_id is None:
         print(f"❌ Папка '{FOLDER_NAME}' не найдена!")
