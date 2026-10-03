@@ -50,8 +50,24 @@ async def main():
 
     # 2. Получаем чаты из папки
     print(f"📂 Загружаем чаты...")
-    dialogs = await client.get_dialogs(folder=target_folder_id)
-    groups = [d.entity for d in dialogs if d.is_group or d.is_channel]
+    from telethon.tl.functions.messages import GetDialogsRequest
+    from telethon.tl.types import InputPeerEmpty
+    
+    dialogs_result = await client(GetDialogsRequest(
+        offset_date=None,
+        offset_id=0,
+        offset_peer=InputPeerEmpty(),
+        limit=200,
+        hash=0,
+        folder_id=target_folder_id
+    ))
+    
+    # Собираем чаты (исключаем пользователей, оставляем только группы и каналы)
+    groups = []
+    for chat in dialogs_result.chats:
+        if getattr(chat, 'megagroup', False) or getattr(chat, 'broadcast', False):
+            groups.append(chat)
+    
     print(f"📊 Найдено чатов: {len(groups)}")
 
     if not groups:
