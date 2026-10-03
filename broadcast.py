@@ -1,71 +1,64 @@
 import asyncio
 import os
 import random
-import base64
 from telethon import TelegramClient
+from telethon.sessions import StringSession
+from telethon.errors import FloodWaitError, UsernameNotOccupiedError, ChannelPrivateError
 from messages import MESSAGES
+from groups import GROUPS
 
-# ===== НАСТРОЙКИ =====
 API_ID = int(os.environ["API_ID"])
 API_HASH = os.environ["API_HASH"]
-PHONE = os.environ["PHONE"]
 SESSION_B64 = os.environ["SESSION_B64"]
+PHONE = os.environ.get("PHONE", "")
 
-# ===== СПИСОК ГРУПП =====
-GROUPS = [
-    # Полоцк / Новополоцк
-    "baraholkapnpn",
-    "baraholkapolostknovopolotsk",
-    "baraholkapnp",
-    "baraholkapolostknp",
-    "baraholkapolostknp0",
-    "barakholka_polotsk",
-    "SmokeHub_baraholka_Polotsk",
-    # Минск / РБ
-    "onlyvapebel",
-    "minsk_vape7",
-    # Другие
-    "barakholka1",
-    "baraholka_v_rb",
-    "baraholka_ge",
-]
-# =====================
+PAUSE_MIN = 180
+PAUSE_MAX = 600
 
 async def main():
-    # Восстанавливаем сессию из base64
-    with open("userbot_session.session", "wb") as f:
-        f.write(base64.b64decode(SESSION_B64))
+    client = TelegramClient(StringSession(SESSION_B64), API_ID, API_HASH)
+    await client.start(phone=PHONE or None)
+    me = await client.get_me()
+    print(f"✅ Подключён как @{me.username or me.id}")
 
-    client = TelegramClient("userbot_session", API_ID, API_HASH)
-    await client.start(phone=PHONE)
-    print("✅ Аккаунт подключён")
-
-    # Загружаем индекс (какой шаблон отправить следующим)
     try:
-        with open("last_index.txt", "r") as f:
+        with open("last_index.txt") as f:
             index = int(f.read().strip())
     except (FileNotFoundError, ValueError):
         index = 0
 
-    # Берём текст по индексу
-    message_text = MESSAGES[index % len(MESSAGES)]
-    print(f"📨 Отправляем шаблон #{index % len(MESSAGES) + 1} из {len(MESSAGES)}")
+    msg_num = index % len(MESSAGES)
+    message_text = MESSAGES[msg_num]
+    print(f"📨 Шаблон #{msg_num + 1} из {len(MESSAGES)}")
 
-    # Рассылка по списку групп
-    for i, group in enumerate(GROUPS):
+    sent = failed = 0
+    for i, group in enumerate(GROUPS, start=1):
         try:
             await client.send_message(group, message_text)
-            print(f"[{i+1}/{len(GROUPS)}] ✅ {group}")
+            print(f"[{i}/{len(GROUPS)}] ✅ {group}")
+            sent += 1
+        except FloodWaitError as e:
+            print(f"⏳ FLOOD WAIT {e.seconds} сек — прерываю прогон.")
+            break
+        except UsernameNotOccupiedError:
+            print(f"[{i}/{len(GROUPS)}] ❌ {group} — нет такого username")
+            failed += 1
+        except ChannelPrivateError:
+            print(f"[{i}/{len(GROUPS)}] ❌ {group} — нет доступа")
+            failed += 1
         except Exception as e:
-            print(f"[{i+1}/{len(GROUPS)}] ❌ {group} — {e}")
-        # Пауза между группами, чтобы не спалиться
-        await asyncio.sleep(random.randint(30, 90))
+            print(f"[{i}/{len(GROUPS)}] ❌ {group} — {type(e).__name__}: {e}")
+            failed += 1
 
-    # Сохраняем следующий индекс
+        if i < len(GROUPS):
+            d = random.randint(PAUSE_MIN, PAUSE_MAX)
+            print(f"   ⏸ {d} сек...")
+            await asyncio.sleep(d)
+
     with open("last_index.txt", "w") as f:
         f.write(str(index + 1))
 
-    print("✅ Рассылка завершена!")
+    print(f"\n📊 Итог: отправлено {sent}, ошибок {failed}")
     await client.disconnect()
 
 if __name__ == "__main__":
